@@ -1,5 +1,9 @@
 #include "ILI9341LCDDisplay.h"
 
+#ifdef ESP32
+  #include <esp_heap_caps.h>
+#endif
+
 #ifndef DISPLAY_ROTATION
   #define DISPLAY_ROTATION 3
 #endif
@@ -12,8 +16,44 @@
   #define DISPLAY_SCALE_Y 3.75f // 240 / 64
 #endif
 
-#define DISPLAY_WIDTH 240
-#define DISPLAY_HEIGHT 320
+// ---------------- ILI9341Canvas16 ----------------
+
+bool ILI9341Canvas16::alloc() {
+  if (_buf) return true;
+  size_t sz = (size_t)WIDTH * HEIGHT * sizeof(uint16_t);
+#ifdef ESP32
+  _buf = (uint16_t *) heap_caps_malloc(sz, MALLOC_CAP_SPIRAM);
+  if (!_buf) _buf = (uint16_t *) malloc(sz);   // no/full PSRAM: try internal heap
+#else
+  _buf = (uint16_t *) malloc(sz);
+#endif
+  return _buf != NULL;
+}
+
+void ILI9341Canvas16::drawPixel(int16_t x, int16_t y, uint16_t color) {
+  if (!_buf || x < 0 || y < 0 || x >= WIDTH || y >= HEIGHT) return;
+  _buf[(int32_t)y * WIDTH + x] = color;
+}
+
+void ILI9341Canvas16::fillScreen(uint16_t color) {
+  if (!_buf) return;
+  int32_t n = (int32_t)WIDTH * HEIGHT;
+  for (int32_t i = 0; i < n; i++) _buf[i] = color;
+}
+
+void ILI9341Canvas16::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color) {
+  if (!_buf) return;
+  if (x < 0) { w += x; x = 0; }
+  if (y < 0) { h += y; y = 0; }
+  if (x + w > WIDTH)  w = WIDTH - x;
+  if (y + h > HEIGHT) h = HEIGHT - y;
+  for (int16_t j = 0; j < h; j++) {
+    uint16_t* row = &_buf[(int32_t)(y + j) * WIDTH + x];
+    for (int16_t i = 0; i < w; i++) row[i] = color;
+  }
+}
+
+// ---------------- ILI9341LCDDisplay ----------------
 
 bool ILI9341LCDDisplay::i2c_probe(TwoWire& wire, uint8_t addr) {
   return true;
@@ -33,11 +73,13 @@ bool ILI9341LCDDisplay::begin() {
 
     display.setSPISpeed(40e6);
 
+    canvas.alloc();   // falls back to direct panel drawing when out of memory
+
     display.fillScreen(ILI9341_BLACK);
-    display.setTextColor(ILI9341_WHITE);
-    display.setTextSize(2 * DISPLAY_SCALE_X); 
-    display.cp437(true); // Use full 256 char 'Code Page 437' font
-  
+    gfx().setTextColor(ILI9341_WHITE);
+    gfx().setTextSize(2 * DISPLAY_SCALE_X);
+    gfx().cp437(true); // Use full 256 char 'Code Page 437' font
+
     _isOn = true;
   }
 
@@ -66,18 +108,19 @@ void ILI9341LCDDisplay::turnOff() {
 }
 
 void ILI9341LCDDisplay::clear() {
-  display.fillScreen(ILI9341_BLACK);
+  gfx().fillScreen(ILI9341_BLACK);
+  if (canvas.getBuffer()) endFrame();
 }
 
 void ILI9341LCDDisplay::startFrame(Color bkg) {
-  display.fillScreen(ILI9341_BLACK);
-  display.setTextColor(ILI9341_WHITE);
-  display.setTextSize(1 * DISPLAY_SCALE_X); // This one affects size of Please wait... message
-  display.cp437(true); // Use full 256 char 'Code Page 437' font
+  gfx().fillScreen(ILI9341_BLACK);
+  gfx().setTextColor(ILI9341_WHITE);
+  gfx().setTextSize(1 * DISPLAY_SCALE_X); // This one affects size of Please wait... message
+  gfx().cp437(true); // Use full 256 char 'Code Page 437' font
 }
 
 void ILI9341LCDDisplay::setTextSize(int sz) {
-  display.setTextSize(sz * DISPLAY_SCALE_X);
+  gfx().setTextSize(sz * DISPLAY_SCALE_X);
 }
 
 void ILI9341LCDDisplay::setColor(Color c) {
@@ -85,45 +128,45 @@ void ILI9341LCDDisplay::setColor(Color c) {
     case DisplayDriver::DARK :
       _color = ILI9341_BLACK;
       break;
-    case DisplayDriver::LIGHT : 
+    case DisplayDriver::LIGHT :
       _color = ILI9341_WHITE;
       break;
-    case DisplayDriver::RED : 
+    case DisplayDriver::RED :
       _color = ILI9341_RED;
       break;
-    case DisplayDriver::GREEN : 
+    case DisplayDriver::GREEN :
       _color = ILI9341_GREEN;
       break;
-    case DisplayDriver::BLUE : 
+    case DisplayDriver::BLUE :
       _color = ILI9341_BLUE;
       break;
-    case DisplayDriver::YELLOW : 
+    case DisplayDriver::YELLOW :
       _color = ILI9341_YELLOW;
       break;
-    case DisplayDriver::ORANGE : 
+    case DisplayDriver::ORANGE :
       _color = ILI9341_ORANGE;
       break;
     default:
       _color = ILI9341_WHITE;
       break;
   }
-  display.setTextColor(_color);
+  gfx().setTextColor(_color);
 }
 
 void ILI9341LCDDisplay::setCursor(int x, int y) {
-  display.setCursor(x * DISPLAY_SCALE_X, y * DISPLAY_SCALE_Y);
+  gfx().setCursor(x * DISPLAY_SCALE_X, y * DISPLAY_SCALE_Y);
 }
 
 void ILI9341LCDDisplay::print(const char* str) {
-  display.print(str);
+  gfx().print(str);
 }
 
 void ILI9341LCDDisplay::fillRect(int x, int y, int w, int h) {
-  display.fillRect(x * DISPLAY_SCALE_X, y * DISPLAY_SCALE_Y, w * DISPLAY_SCALE_X, h * DISPLAY_SCALE_Y, _color);
+  gfx().fillRect(x * DISPLAY_SCALE_X, y * DISPLAY_SCALE_Y, w * DISPLAY_SCALE_X, h * DISPLAY_SCALE_Y, _color);
 }
 
 void ILI9341LCDDisplay::drawRect(int x, int y, int w, int h) {
-  display.drawRect(x * DISPLAY_SCALE_X, y * DISPLAY_SCALE_Y, w * DISPLAY_SCALE_X, h * DISPLAY_SCALE_Y, _color);
+  gfx().drawRect(x * DISPLAY_SCALE_X, y * DISPLAY_SCALE_Y, w * DISPLAY_SCALE_X, h * DISPLAY_SCALE_Y, _color);
 }
 
 void ILI9341LCDDisplay::drawXbm(int x, int y, const uint8_t* bits, int w, int h) {
@@ -137,7 +180,7 @@ void ILI9341LCDDisplay::drawXbm(int x, int y, const uint8_t* bits, int w, int h)
       if (pixelOn) {
         for (int dy = 0; dy < DISPLAY_SCALE_X; dy++) {
           for (int dx = 0; dx < DISPLAY_SCALE_X; dx++) {
-            display.drawPixel(x * DISPLAY_SCALE_X + i * DISPLAY_SCALE_X + dx, y * DISPLAY_SCALE_Y + j * DISPLAY_SCALE_X + dy, _color);
+            gfx().drawPixel(x * DISPLAY_SCALE_X + i * DISPLAY_SCALE_X + dx, y * DISPLAY_SCALE_Y + j * DISPLAY_SCALE_X + dy, _color);
           }
         }
       }
@@ -148,11 +191,13 @@ void ILI9341LCDDisplay::drawXbm(int x, int y, const uint8_t* bits, int w, int h)
 uint16_t ILI9341LCDDisplay::getTextWidth(const char* str) {
   int16_t x1, y1;
   uint16_t w, h;
-  display.getTextBounds(str, 0, 0, &x1, &y1, &w, &h);
+  gfx().getTextBounds(str, 0, 0, &x1, &y1, &w, &h);
 
   return w / DISPLAY_SCALE_X;
 }
 
 void ILI9341LCDDisplay::endFrame() {
-  // display.display();
+  if (canvas.getBuffer()) {
+    display.drawRGBBitmap(0, 0, canvas.getBuffer(), canvas.width(), canvas.height());
+  }
 }
