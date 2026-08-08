@@ -1,0 +1,142 @@
+# MeshCore (Retia Nibble Zero) automatic release build.
+#
+# Builds the Nibble Zero companion/repeater envs and publishes a PRERELEASE. In
+# the scriptkitty release-channel contract a prerelease = "automatically compiled,
+# NOT yet verified on hardware"; the scriptkitty.sh flasher offers these behind an
+# "untested" warning. After a human/workbench verifies a build on real hardware,
+# run "MeshCore Promote" to flip that target to a full release (= verified), which
+# makes it the flasher's default for that card.
+#
+# Tagging: meshcore-v<version>-sk.<n>, version parsed from FIRMWARE_VERSION in
+# examples/companion_radio/MyMesh.h, <n> auto-increments per version.
+# Asset names (STABLE forever — the channel matches by them):
+#   meshcore-nibble-zero-usb.factory.bin
+#   meshcore-nibble-zero-ble.factory.bin
+#   meshcore-nibble-zero-repeater.factory.bin
+name: MeshCore Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "Extra release notes (what changed / why this build)"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: meshcore-nibble-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # device = asset-name suffix, matching each scriptkitty channel profile
+          - env: nibble_zero_connect_companion_radio_usb_
+            device: nibble-zero-usb
+            chip: esp32s3
+          - env: nibble_zero_connect_companion_radio_ble_
+            device: nibble-zero-ble
+            chip: esp32s3
+          - env: nibble_zero_connect_repeater_
+            device: nibble-zero-repeater
+            chip: esp32s3
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reuses the repo's own composite action (Python 3.13 + PlatformIO + cache).
+      - name: Setup Build Environment
+        uses: ./.github/actions/setup-build-environment
+
+      - name: Build + merge factory image (${{ matrix.env }})
+        run: |
+          set -euo pipefail
+          # MeshCore's own merge-bin.py 'mergebin' target lays out bootloader +
+          # partitions + boot_app0 + app at this variant's offsets into one 0x0 image.
+          MERGED_BIN_PATH="$PWD/meshcore-${{ matrix.device }}.factory.bin" \
+            pio run -e ${{ matrix.env }} -t mergebin
+          test -f "meshcore-${{ matrix.device }}.factory.bin"
+          # Assert the merged image header is DIO (byte 2 == 02). DIO reads on QIO
+          # hardware; a stray QIO header is the classic native-USB brick risk.
+          HDR=$(xxd -p -l 4 "meshcore-${{ matrix.device }}.factory.bin")
+          echo "header: $HDR"
+          [ "${HDR:4:2}" = "02" ] || { echo "::error::flash-mode byte is not DIO ($HDR)"; exit 1; }
+          sha256sum "meshcore-${{ matrix.device }}.factory.bin"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meshcore-${{ matrix.device }}
+          path: meshcore-*.factory.bin
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need all tags to pick the next -sk.<n>
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: meshcore-*
+          path: dist
+          merge-multiple: true
+
+      - name: Create prerelease (auto build — untested)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXTRA_NOTES: ${{ inputs.notes }}
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -oE '"v[0-9]+\.[0-9]+\.[0-9]+"' examples/companion_radio/MyMesh.h | head -1 | tr -d '"v')
+          test -n "$VERSION" || { echo "::error::could not parse FIRMWARE_VERSION from MyMesh.h"; exit 1; }
+          N=1
+          while git rev-parse -q --verify "refs/tags/meshcore-v${VERSION}-sk.${N}" >/dev/null; do
+            N=$((N + 1))
+          done
+          TAG="meshcore-v${VERSION}-sk.${N}"
+          {
+            echo "**Automatic build — UNTESTED.** Compiled from \`${GITHUB_SHA}\` by CI;"
+            echo "nobody has verified this on hardware yet. It appears on"
+            echo "[scriptkitty.sh](https://scriptkitty.sh) under \"untested auto-builds\" once"
+            echo "its card exists (a card needs a first VERIFIED build)."
+            echo
+            echo "After hardware verification, run **MeshCore Promote** with this tag and the"
+            echo "verified device to mark it verified and make it the flasher default."
+            echo
+            echo "| asset | device | sha256 |"
+            echo "|---|---|---|"
+            for f in dist/*.factory.bin; do
+              base=$(basename "$f")
+              echo "| $base | ${base#meshcore-} | $(sha256sum "$f" | cut -d' ' -f1) |"
+            done
+            if [ -n "$EXTRA_NOTES" ]; then echo; echo "$EXTRA_NOTES"; fi
+          } > notes.md
+          gh release create "$TAG" --prerelease \
+            --title "MeshCore Nibble Zero ${VERSION} auto build sk.${N}" \
+            --notes-file notes.md \
+            dist/*.factory.bin
+          echo "published $TAG"
+
+      - name: Ping scriptkitty.sh flasher
+        env:
+          SK_TOKEN: ${{ secrets.SCRIPTKITTY_DISPATCH_TOKEN }}
+        run: |
+          if [ -n "$SK_TOKEN" ]; then
+            curl -sf -X POST \
+              -H "Authorization: Bearer $SK_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/repos/RetiaLLC/scriptkitty.sh/dispatches \
+              -d '{"event_type":"channel-release"}' \
+              && echo "flasher rebuild triggered" \
+              || echo "::warning::dispatch to scriptkitty.sh failed — site picks this up on its weekly cron"
+          else
+            echo "::notice::SCRIPTKITTY_DISPATCH_TOKEN not set — site picks this up on its weekly cron or a manual run"
+          fi
