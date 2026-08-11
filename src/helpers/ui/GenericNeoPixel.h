@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef PIN_NEOPIXEL
+#ifdef NEOPIXEL_NOTIFY_PIN
 
 #include <Arduino.h>
 
@@ -13,7 +13,7 @@
  * sweep across the strip for NEOPIXEL_NOTIFY_MS, then dark again.
  *
  * Build defines:
- *   PIN_NEOPIXEL        data GPIO (required to enable this class)
+ *   NEOPIXEL_NOTIFY_PIN        data GPIO (required to enable this class)
  *   NEOPIXEL_NUM        pixel count (default 8)
  *   NEOPIXEL_BRIGHTNESS 0..255 global brightness (default 200; stock-dim looks dead
  *                       through a silicone diffuser)
@@ -48,4 +48,4 @@ private:
   bool _inited = false;
 };
 
-#endif // PIN_NEOPIXEL
+#endif // NEOPIXEL_NOTIFY_PIN

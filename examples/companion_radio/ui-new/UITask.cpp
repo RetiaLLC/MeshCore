@@ -582,7 +582,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   vibration.begin();
 #endif
 
-#ifdef PIN_NEOPIXEL
+#ifdef NEOPIXEL_NOTIFY_PIN
   neopixel.begin();
 #endif
 
@@ -628,7 +628,7 @@ switch(t){
   }
 #endif
 
-#ifdef PIN_NEOPIXEL
+#ifdef NEOPIXEL_NOTIFY_PIN
   // Flash the NeoPixel strip for message events (the notify indicator on a
   // screenless board like the Newsheen / Pusheen Puck).
   switch (t) {
@@ -849,7 +849,7 @@ void UITask::loop() {
   vibration.loop();
 #endif
 
-#ifdef PIN_NEOPIXEL
+#ifdef NEOPIXEL_NOTIFY_PIN
   neopixel.loop();
 #endif
 

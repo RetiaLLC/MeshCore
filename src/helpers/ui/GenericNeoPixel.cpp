@@ -1,10 +1,10 @@
 #include "GenericNeoPixel.h"
 
-#ifdef PIN_NEOPIXEL
+#ifdef NEOPIXEL_NOTIFY_PIN
 
 #include <Adafruit_NeoPixel.h>
 
-static Adafruit_NeoPixel _strip(NEOPIXEL_NUM, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
+static Adafruit_NeoPixel _strip(NEOPIXEL_NUM, NEOPIXEL_NOTIFY_PIN, NEO_GRB + NEO_KHZ800);
 
 // Simple HSV->packed color (h: 0..255 hue), full sat/val; brightness is applied
 // globally by the strip.
@@ -31,7 +31,7 @@ void GenericNeoPixel::begin() {
   _strip.show();
   _inited = true;
 #ifdef NEOPIXEL_NOTIFY_DEBUG
-  Serial.printf("[neopixel] ready: %d px on GPIO%d, boot sweep done\n", NEOPIXEL_NUM, PIN_NEOPIXEL);
+  Serial.printf("[neopixel] ready: %d px on GPIO%d, boot sweep done\n", NEOPIXEL_NUM, NEOPIXEL_NOTIFY_PIN);
 #endif
 }
 
@@ -72,4 +72,4 @@ void GenericNeoPixel::off() {
   _start = 0;
 }
 
-#endif // PIN_NEOPIXEL
+#endif // NEOPIXEL_NOTIFY_PIN

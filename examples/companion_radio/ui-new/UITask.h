@@ -18,7 +18,7 @@
 #ifdef PIN_VIBRATION
   #include <helpers/ui/GenericVibration.h>
 #endif
-#ifdef PIN_NEOPIXEL
+#ifdef NEOPIXEL_NOTIFY_PIN
   #include <helpers/ui/GenericNeoPixel.h>
 #endif
 
@@ -34,7 +34,7 @@ class UITask : public AbstractUITask {
 #ifdef PIN_VIBRATION
   GenericVibration vibration;
 #endif
-#ifdef PIN_NEOPIXEL
+#ifdef NEOPIXEL_NOTIFY_PIN
   GenericNeoPixel neopixel;
 #endif
   unsigned long _next_refresh, _auto_off;
