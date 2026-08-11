@@ -47,6 +47,16 @@ jobs:
           - env: nibble_zero_connect_repeater_
             device: nibble-zero-repeater
             chip: esp32s3
+          # Newsheen = ESP32-S3 Pusheen Puck (Wio-SX1262, 8x WS2812B message-notify)
+          - env: newsheen_companion_radio_ble
+            device: newsheen-ble
+            chip: esp32s3
+          - env: newsheen_companion_radio_usb
+            device: newsheen-usb
+            chip: esp32s3
+          - env: newsheen_repeater
+            device: newsheen-repeater
+            chip: esp32s3
     steps:
       - uses: actions/checkout@v4
 
