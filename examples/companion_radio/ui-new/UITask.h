@@ -18,6 +18,9 @@
 #ifdef PIN_VIBRATION
   #include <helpers/ui/GenericVibration.h>
 #endif
+#ifdef PIN_NEOPIXEL
+  #include <helpers/ui/GenericNeoPixel.h>
+#endif
 
 #include "../AbstractUITask.h"
 #include "../NodePrefs.h"
@@ -30,6 +33,9 @@ class UITask : public AbstractUITask {
 #endif
 #ifdef PIN_VIBRATION
   GenericVibration vibration;
+#endif
+#ifdef PIN_NEOPIXEL
+  GenericNeoPixel neopixel;
 #endif
   unsigned long _next_refresh, _auto_off;
   NodePrefs* _node_prefs;

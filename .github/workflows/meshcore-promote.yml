@@ -26,7 +26,7 @@ on:
       device:
         description: "Which device build was verified"
         type: choice
-        options: [nibble-zero-usb, nibble-zero-ble, nibble-zero-repeater, all]
+        options: [nibble-zero-usb, nibble-zero-ble, nibble-zero-repeater, newsheen-ble, newsheen-usb, newsheen-repeater, all]
         required: true
       method:
         description: "How it was verified"
@@ -58,7 +58,7 @@ jobs:
             || { echo "::error::release $TAG not found"; exit 1; }
 
           if [ "$DEVICE" = "all" ]; then
-            DEVICES="nibble-zero-usb nibble-zero-ble nibble-zero-repeater"
+            DEVICES="nibble-zero-usb nibble-zero-ble nibble-zero-repeater newsheen-ble newsheen-usb newsheen-repeater"
           else
             DEVICES="$DEVICE"
           fi

@@ -582,6 +582,10 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   vibration.begin();
 #endif
 
+#ifdef PIN_NEOPIXEL
+  neopixel.begin();
+#endif
+
   ui_started_at = millis();
   _alert_expiry = 0;
 
@@ -621,6 +625,21 @@ switch(t){
   // Trigger vibration for all UI events except none
   if (t != UIEventType::none) {
     vibration.trigger();
+  }
+#endif
+
+#ifdef PIN_NEOPIXEL
+  // Flash the NeoPixel strip for message events (the notify indicator on a
+  // screenless board like the Newsheen / Pusheen Puck).
+  switch (t) {
+    case UIEventType::contactMessage:
+    case UIEventType::channelMessage:
+    case UIEventType::roomMessage:
+    case UIEventType::newContactMessage:
+      neopixel.trigger();
+      break;
+    default:
+      break;
   }
 #endif
 }
@@ -828,6 +847,10 @@ void UITask::loop() {
 
 #ifdef PIN_VIBRATION
   vibration.loop();
+#endif
+
+#ifdef PIN_NEOPIXEL
+  neopixel.loop();
 #endif
 
 #ifdef AUTO_SHUTDOWN_MILLIVOLTS
