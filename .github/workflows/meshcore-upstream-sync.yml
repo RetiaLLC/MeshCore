@@ -26,6 +26,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write        # conflict path opens an issue for a human
 
 concurrency:
   group: meshcore-upstream-sync
