@@ -1,18 +1,20 @@
-# MeshCore (Retia Nibble Zero) automatic release build.
+# MeshCore (Retia, all in-tree boards) automatic release build.
 #
-# Builds the Nibble Zero companion/repeater envs and publishes a PRERELEASE. In
-# the scriptkitty release-channel contract a prerelease = "automatically compiled,
-# NOT yet verified on hardware"; the scriptkitty.sh flasher offers these behind an
-# "untested" warning. After a human/workbench verifies a build on real hardware,
-# run "MeshCore Promote" to flip that target to a full release (= verified), which
-# makes it the flasher's default for that card.
+# Builds every Retia board's companion (usb+ble) + repeater envs and publishes a
+# PRERELEASE. In the scriptkitty release-channel contract a prerelease =
+# "automatically compiled, NOT yet verified on hardware"; the scriptkitty.sh
+# flasher offers these behind an "untested" warning. After a human/workbench
+# verifies a build on real hardware, run "MeshCore Promote" to flip that target to
+# a full release (= verified), which makes it the flasher's default for that card.
+#
+# Boards: Nibble Zero, Newsheen (Pusheen Puck), Bluetooth Nugget + RFM95, Retia
+# DEF CON badge, Nibble Screen Connect. Verification is PER-TARGET — promoting one
+# board never marks the others verified.
 #
 # Tagging: meshcore-v<version>-sk.<n>, version parsed from FIRMWARE_VERSION in
 # examples/companion_radio/MyMesh.h, <n> auto-increments per version.
-# Asset names (STABLE forever — the channel matches by them):
-#   meshcore-nibble-zero-usb.factory.bin
-#   meshcore-nibble-zero-ble.factory.bin
-#   meshcore-nibble-zero-repeater.factory.bin
+# Asset names are STABLE forever (the channel matches by them):
+#   meshcore-<device>.factory.bin  where <device> is the matrix 'device' below.
 name: MeshCore Release Build
 
 on:
@@ -56,6 +58,38 @@ jobs:
             chip: esp32s3
           - env: newsheen_repeater
             device: newsheen-repeater
+            chip: esp32s3
+          # Bluetooth Nugget = HakCat Bluetooth Nugget (LOLIN S3 Mini) + RFM95 (SX1276) backpack
+          - env: bluetooth_nugget_rfm95_companion_radio_usb
+            device: bluetooth-nugget-usb
+            chip: esp32s3
+          - env: bluetooth_nugget_rfm95_companion_radio_ble
+            device: bluetooth-nugget-ble
+            chip: esp32s3
+          - env: bluetooth_nugget_rfm95_repeater
+            device: bluetooth-nugget-repeater
+            chip: esp32s3
+          # Retia 2024 DEF CON badge (ESP32-S3, RFM95/SX1276, ILI9341 TFT). Plain
+          # MeshCore companion/repeater — coexists with the richer defcon-badge
+          # meshcore-touch build sourced from RetiaLLC/DefconBadge2026.
+          - env: Retia_DCBadge_companion_radio_usb
+            device: badge-usb
+            chip: esp32s3
+          - env: Retia_DCBadge_companion_radio_ble
+            device: badge-ble
+            chip: esp32s3
+          - env: Retia_DCBadge_repeater
+            device: badge-repeater
+            chip: esp32s3
+          # Nibble Screen Connect (ESP32-S3, 128x32 OLED, SX1262)
+          - env: nibble_screen_connect_companion_radio_usb_
+            device: screen-connect-usb
+            chip: esp32s3
+          - env: nibble_screen_connect_companion_radio_ble_
+            device: screen-connect-ble
+            chip: esp32s3
+          - env: nibble_screen_connect_repeater_
+            device: screen-connect-repeater
             chip: esp32s3
     steps:
       - uses: actions/checkout@v4
