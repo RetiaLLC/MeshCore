@@ -1,0 +1,126 @@
+# MeshCore upstream tracking — auto-cut a GATED (untested) prerelease when
+# upstream meshcore-dev/MeshCore ships a newer companion release.
+#
+# Flow (nothing is ever auto-verified, retia-badge is never auto-modified):
+#   1. Daily, compare upstream's latest companion-v<X.Y.Z> release to the fork's
+#      FIRMWARE_VERSION (examples/companion_radio/MyMesh.h on retia-badge).
+#   2. If the fork is behind, merge the upstream release tag onto a throwaway
+#      branch auto/upstream-sync-v<X.Y.Z>, push it, and open a PR into retia-badge.
+#   3. Call the reusable build to cut an UNTESTED all-boards prerelease from that
+#      branch (workflow_call runs in-run, so no PAT is needed to trigger a build).
+#   4. A human reviews the PR, flashes + verifies on hardware, promotes per target,
+#      then merges the PR to actually advance retia-badge.
+#   Merge conflicts abort cleanly and open an issue — they never break anything.
+name: MeshCore Upstream Sync
+
+on:
+  schedule:
+    - cron: "17 6 * * *"   # daily 06:17 UTC
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Sync even if the fork is not behind (testing)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: meshcore-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  detect-and-sync:
+    runs-on: ubuntu-latest
+    outputs:
+      do_build: ${{ steps.sync.outputs.do_build }}
+      branch: ${{ steps.sync.outputs.branch }}
+      up_ver: ${{ steps.ver.outputs.up_ver }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: retia-badge
+          fetch-depth: 0
+
+      - name: Determine upstream vs fork version
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          UPSTREAM_TAG=$(gh release list --repo meshcore-dev/MeshCore --limit 40 \
+            --json tagName,isPrerelease \
+            --jq 'map(select(.isPrerelease==false and (.tagName|startswith("companion-v")))) | .[0].tagName')
+          test -n "$UPSTREAM_TAG" || { echo "::error::no upstream companion release found"; exit 1; }
+          UP_VER=${UPSTREAM_TAG#companion-v}
+          FORK_VER=$(grep -oE '"v[0-9]+\.[0-9]+\.[0-9]+"' examples/companion_radio/MyMesh.h | head -1 | tr -d '"v')
+          echo "upstream=$UP_VER ($UPSTREAM_TAG)  fork=$FORK_VER"
+          # behind = upstream strictly greater than fork (version sort)
+          if [ "$UP_VER" != "$FORK_VER" ] && \
+             [ "$(printf '%s\n%s\n' "$UP_VER" "$FORK_VER" | sort -V | tail -1)" = "$UP_VER" ]; then
+            BEHIND=1
+          else
+            BEHIND=0
+          fi
+          {
+            echo "up_ver=$UP_VER"
+            echo "upstream_tag=$UPSTREAM_TAG"
+            echo "fork_ver=$FORK_VER"
+            echo "behind=$BEHIND"
+          } >> "$GITHUB_OUTPUT"
+          echo "::notice::upstream v$UP_VER vs fork v$FORK_VER (behind=$BEHIND)"
+
+      - name: Merge upstream + open PR
+        id: sync
+        if: steps.ver.outputs.behind == '1' || inputs.force
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UP_VER: ${{ steps.ver.outputs.up_ver }}
+          UPSTREAM_TAG: ${{ steps.ver.outputs.upstream_tag }}
+        run: |
+          set -euo pipefail
+          echo "do_build=false" >> "$GITHUB_OUTPUT"
+          BRANCH="auto/upstream-sync-v${UP_VER}"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+          # Idempotency: a live sync branch means a PR is already open — don't re-cut.
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "::notice::$BRANCH already exists — sync already in flight, skipping"
+            exit 0
+          fi
+
+          git config user.name  "retia-sync-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git remote add upstream https://github.com/meshcore-dev/MeshCore.git
+          git fetch --no-tags upstream "refs/tags/${UPSTREAM_TAG}"
+
+          git checkout -b "$BRANCH" retia-badge
+          if ! git merge --no-edit FETCH_HEAD; then
+            git merge --abort || true
+            echo "::warning::merge conflict syncing ${UPSTREAM_TAG}; opening an issue"
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "Upstream sync v${UP_VER}: merge conflict needs a human" \
+              --body "Automated sync could not cleanly merge \`${UPSTREAM_TAG}\` into retia-badge. Resolve manually, then run **MeshCore Release Build** on the merge branch." \
+              || echo "::warning::issue create failed"
+            exit 0
+          fi
+
+          git push origin "$BRANCH"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base retia-badge --head "$BRANCH" \
+            --title "Upstream sync: MeshCore v${UP_VER}" \
+            --body "Automated merge of upstream \`${UPSTREAM_TAG}\` into retia-badge. An UNTESTED all-boards prerelease is being cut from this branch; nothing is verified or default until each target is promoted. Before merging: confirm the build is green, flash + verify on hardware, and promote the targets you checked." \
+            || echo "::warning::pr create failed (maybe already exists)"
+
+          echo "do_build=true" >> "$GITHUB_OUTPUT"
+          echo "::notice::prepared $BRANCH for MeshCore v${UP_VER}"
+
+  build:
+    needs: detect-and-sync
+    if: needs.detect-and-sync.outputs.do_build == 'true'
+    uses: ./.github/workflows/meshcore-build.yml
+    with:
+      ref: ${{ needs.detect-and-sync.outputs.branch }}
+      notes: "Automated upstream sync to MeshCore v${{ needs.detect-and-sync.outputs.up_ver }} (untested)."
+    secrets: inherit
