@@ -108,6 +108,17 @@ jobs:
             exit 0
           fi
 
+          # GITHUB_TOKEN is NOT allowed to create/update .github/workflows/* on push,
+          # and the upstream merge usually touches upstream's own CI workflow files —
+          # which gets the whole push rejected ("refusing to allow a GitHub App to
+          # create or update workflow ... without workflows permission"). We run our
+          # own meshcore-*.yml and don't want upstream's CI anyway, so force the
+          # workflow dir back to retia-badge's exact set before pushing.
+          rm -rf .github/workflows
+          git checkout retia-badge -- .github/workflows
+          git add -A .github/workflows
+          git diff --cached --quiet || git commit -m "sync: keep Retia workflow files (GITHUB_TOKEN can't push workflow changes)"
+
           git push origin "$BRANCH"
           gh pr create --repo "$GITHUB_REPOSITORY" --base retia-badge --head "$BRANCH" \
             --title "Upstream sync: MeshCore v${UP_VER}" \
