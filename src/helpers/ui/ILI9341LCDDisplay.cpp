@@ -4,6 +4,19 @@
   #include <esp_heap_caps.h>
 #endif
 
+// MeshCore 1.17.x theme colors (RGB565) for this color TFT. Every DisplayDriver
+// must define the UIColor statics; the badge UI is white-on-black with a navy
+// title bar. window_bkg must differ from title_bkg so UITask draws the title bar.
+ColorVal UIColor::window_bkg    = ILI9341_BLACK;
+ColorVal UIColor::title_bkg     = ILI9341_NAVY;
+ColorVal UIColor::title_txt     = ILI9341_WHITE;
+ColorVal UIColor::primary_txt   = ILI9341_WHITE;
+ColorVal UIColor::secondary_txt = ILI9341_DARKGREY;
+ColorVal UIColor::warning_txt   = ILI9341_ORANGE;
+ColorVal UIColor::popup_bkg     = ILI9341_NAVY;
+ColorVal UIColor::popup_txt     = ILI9341_WHITE;
+ColorVal UIColor::corp_blue     = ILI9341_BLUE;
+
 #ifndef DISPLAY_ROTATION
   #define DISPLAY_ROTATION 3
 #endif
@@ -112,7 +125,7 @@ void ILI9341LCDDisplay::clear() {
   if (canvas.getBuffer()) endFrame();
 }
 
-void ILI9341LCDDisplay::startFrame(Color bkg) {
+void ILI9341LCDDisplay::startFrame(ColorVal bkg) {
   gfx().fillScreen(ILI9341_BLACK);
   gfx().setTextColor(ILI9341_WHITE);
   gfx().setTextSize(1 * DISPLAY_SCALE_X); // This one affects size of Please wait... message
@@ -123,33 +136,9 @@ void ILI9341LCDDisplay::setTextSize(int sz) {
   gfx().setTextSize(sz * DISPLAY_SCALE_X);
 }
 
-void ILI9341LCDDisplay::setColor(Color c) {
-  switch (c) {
-    case DisplayDriver::DARK :
-      _color = ILI9341_BLACK;
-      break;
-    case DisplayDriver::LIGHT :
-      _color = ILI9341_WHITE;
-      break;
-    case DisplayDriver::RED :
-      _color = ILI9341_RED;
-      break;
-    case DisplayDriver::GREEN :
-      _color = ILI9341_GREEN;
-      break;
-    case DisplayDriver::BLUE :
-      _color = ILI9341_BLUE;
-      break;
-    case DisplayDriver::YELLOW :
-      _color = ILI9341_YELLOW;
-      break;
-    case DisplayDriver::ORANGE :
-      _color = ILI9341_ORANGE;
-      break;
-    default:
-      _color = ILI9341_WHITE;
-      break;
-  }
+void ILI9341LCDDisplay::setColor(ColorVal c) {
+  // ColorVal is the RGB565 value directly (from the UIColor::* theme above).
+  _color = c;
   gfx().setTextColor(_color);
 }
 
